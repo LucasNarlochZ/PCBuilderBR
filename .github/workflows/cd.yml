@@ -1,9 +1,6 @@
-name: Deploy to Production
+name: VPS deployment (retired)
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
@@ -15,6 +12,7 @@ permissions:
 
 jobs:
   deploy:
+    if: ${{ false }}
     name: Build and deploy on VPS
     runs-on: ubuntu-latest
     timeout-minutes: 20
