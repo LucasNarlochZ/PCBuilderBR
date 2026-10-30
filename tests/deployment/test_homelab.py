@@ -16,5 +16,5 @@ class DeploymentTests(unittest.TestCase):
             docker = root / 'docker'
             docker.write_text('#!/bin/sh\nexit 42\n')
             docker.chmod(0o755)
-            result = subprocess.run(['bash', str(script)], env={**os.environ, 'PATH': directory + ':' + os.environ['PATH'], 'DEPLOY_PATH': str(ROOT)})
+            result = subprocess.run(['bash', str(script)], env={**os.environ, 'PATH': directory + ':' + os.environ['PATH'], 'DEPLOY_PATH': directory})
             self.assertNotEqual(result.returncode, 0)
