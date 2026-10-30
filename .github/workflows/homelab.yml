@@ -1,0 +1,49 @@
+name: Deploy to homelab
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pcbuilderbr-production-homelab
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production-homelab
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Verify SSH identity and prepare environment
+        env:
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ vars.POSTGRES_DB }}
+          PROXY_UPSTREAM_NAME: ${{ vars.PROXY_UPSTREAM_NAME }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_KNOWN_HOSTS"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          umask 077
+          printf 'POSTGRES_USER=%s\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=%s\nPROXY_UPSTREAM_NAME=%s\n' "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$POSTGRES_DB" "$PROXY_UPSTREAM_NAME" > .env.deploy
+      - name: Transfer and deploy checked out revision
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
+          git archive HEAD | ssh -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" "tar -xf - -C '$DEPLOY_PATH'"
+          scp -o StrictHostKeyChecking=yes .env.deploy "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.env"
+          ssh -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' bash '$DEPLOY_PATH/scripts/deploy-homelab.sh'"
